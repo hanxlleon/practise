@@ -29,7 +29,7 @@ for_tag = '\{% for[a-zA-Z0-9_$\s]+%\}|{% endfor %\}'
 
 import Queue
 
-queue = Queue.Queue(10)
+queue = Queue.LifoQueue(10)
 
 
 def render_for2(template, num='', **kwargs):
@@ -38,11 +38,21 @@ def render_for2(template, num='', **kwargs):
     while True:
         token = re.search(for_tag, text)
         if token:
-            start, end = map(lambda x, y: x + y, (end, end), token.span())
-            queue.put((token.group(0), start, end))
-            text = template[end:]
+            if token.group(0).startswith('{% endfor %}'):
+                tag = queue.get()
+                text = render_for(template[tag[1]:end+token.end()], num=range(3), **kwargs)
+                template = template.replace(template[tag[1]:end+token.end()], text)
+
+                end = len(text) - len(template[tag[1]:token.end()]) + tag[1]
+                text = template[end:]
+            else:
+                start, end = map(lambda x, y: x + y, (end, end), token.span())
+                queue.put((token.group(0), start, end))
+                text = template[end:]
         else:
             break
+
+    return template
 
 
 def parse_for(template, num='', **kwargs):
@@ -152,20 +162,24 @@ if __name__ == '__main__':
                             <p>{{ i }}</p>
                             <p>{{ name }}</p>
                                 {% for j in num %}
-                                    <p>{{ i }}</p>
                                     <p>{{ city }}</p>
+                                {% endfor %}
+                                {% for z in num %}
+                                    {% for j in num %}
+                                        <p>{{ time }}</p>
+                                    {% endfor %}
                                 {% endfor %}
                         {% endfor %}
                     </div>
                 </body></html>'''
-    keys = {'name': 'leon', 'city': 'Beijing'}
+    keys = {'name': 'leon', 'city': 'Beijing', 'time': '0030'}
 
     # print render_keys(template_key, **keys)
     # print render_if(template_if, **keys)
     # print render_for(template_for, num=range(10), **keys)
     # print render_for(template_for, num=range(3), **keys)
-    render_for2(template_for, num=range(3), **keys)
-    parse_for(template_for, num=range(3), **keys)
+    print render_for2(template_for, num=range(3), **keys)
+    # parse_for(template_for, num=range(3), **keys)
 
 
 from bottle import SimpleTemplate
