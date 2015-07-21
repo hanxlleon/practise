@@ -1,46 +1,55 @@
 # coding: utf-8
-
-# with open('base.html', 'r') as f:
-#     base = f.read()
-#
-# with open('to_render.html', 'r') as f:
-#     to_render = f.read()
-
-# with open('result.html', 'w') as f:
-#     result = f.read()
 import re
-from HTMLParser import HTMLParser
-from bottle import SimpleTemplate
-
-
-token_reg = '(\{\{ [a-zA-Z0-9_$]+ \}\})'
-key_reg = '\{\{ ([a-zA-Z0-9_$]+) \}\}'
-
-if_reg = '(\{% if [a-zA-Z0-9_$]+ %\}.*\{% endif %\})'
-if_key_reg = '\{% if ([a-zA-Z0-9_$]+) %\}.*\{% endif %\}'
-if_key_text = '\{% if [a-zA-Z0-9_$]+ %\}(.*)\{% endif %\}'
-
-for_reg = '(\{% for [a-zA-Z0-9_$]+ in [a-zA-Z0-9_$]+ %\}.*\{% endfor %\})'
-for_first_key_reg = '\{% for ([a-zA-Z0-9_$]+) in [a-zA-Z0-9_$]+ %\}.*\{% endfor %\}'
-for_second_key_reg = '\{% for [a-zA-Z0-9_$]+ in ([a-zA-Z0-9_$]+) %\}.*\{% endfor %\}'
-for_key_text = '\{% for [a-zA-Z0-9_$]+ in [a-zA-Z0-9_$]+ %\}(.*)\{% endfor %\}'
-
-for_tag = '\{% for[a-zA-Z0-9_$\s]+%\}|{% endfor %\}'
-
 import Queue
 
-queue = Queue.LifoQueue(10)
+
+token_reg = '(\{\{\s*\w+\s*\}\})'  # 提取匹配变量语句块
+key_reg = '\{\{\s*(\w+)\s*\}\}'  # 提取匹配变量语句块中的关键字
+
+if_reg = '(\{%\s*if\s+\w+\s*%\}.*\{%\s*endif\s*%\})'  # 提取匹配if语句块
+if_key_reg = '\{%\s*if\s+(\w+)\s*%\}.*\{%\s*endif\s*%\}'  # 提取匹配if语句块中的关键字
+if_key_text = '\{%\s*if\s+\w+\s*%\}(.*)\{%\s*endif\s*%\}'  # 提取匹配if语句块中的正文
+
+for_reg = '(\{%\s*for\s+\w+\s+in\s+\w+\s*%\}.*\{%\s*endfor\s*%\})'  # 提取匹配for语句块
+for_first_key_reg = '\{%\s*for\s+(\w+)\s+in\s+\w+\s*%\}.*\{%\s*endfor\s*%\}'  # 提取匹配for语句块中的第一个关键字
+for_second_key_reg = '\{%\s*for\s+\w+\s+in\s+(\w+)\s*%\}.*\{%\s*endfor\s*%\}'  # 提取匹配for语句块中的第二个关键字
+for_key_text = '\{%\s*for\s+\w+\s+in\s+\w+\s*%\}(.*)\{%\s*endfor\s*%\}'  # 提取匹配for语句块中的正文
+
+if_tag = '\{%\s*if\s+\w+\s*%\}|\{%\s*endif\s*%\}'  # 提取匹配的if开始或者结束的标志语句(如{% if name %}或{% endif %})
+if_match = re.compile(r'{%\s*endif\s*%}')  # 匹配{% endif %}
+for_tag = '\{%\s*for\s+\w+\s+in\s+\w+\s*%\}|\{%\s*endfor\s*%\}'  # 提取匹配的for开始或者结束的标志语句(如{% for i in name %}或{% endfor %})
+for_match = re.compile(r'{%\s*endfor\s*%}')  # 匹配{% endfor %}
 
 
-def render_for2(template, num='', **kwargs):
+
+
+queue = Queue.LifoQueue(10)  # 最大嵌套深度
+
+
+def render(template, **kwargs):
+    '''渲染整个模板'''
+
+    for_tem = render_for(template, **keys)
+    if_tem = parse_if(for_tem, **keys)
+    key_tem = render_key(if_tem, **keys)
+
+    return key_tem
+
+
+def render_for(template, **kwargs):
+    '''
+    渲染for语句块
+    遇到endfor则从栈中取出对应的for
+    '''
+
     text = template[:]
     start, end = 0, 0
     while True:
         token = re.search(for_tag, text)
         if token:
-            if token.group(0).startswith('{% endfor %}'):
+            if for_match.match(token.group(0)):
                 tag = queue.get()
-                text = render_for(template[tag[1]:end+token.end()], num=range(3), **kwargs)
+                text = parse_for(template[tag[1]:end+token.end()], **kwargs)
                 template = template.replace(template[tag[1]:end+token.end()], text)
 
                 end = len(text) - len(template[tag[1]:token.end()]) + tag[1]
@@ -55,148 +64,174 @@ def render_for2(template, num='', **kwargs):
     return template
 
 
-def parse_for(template, num='', **kwargs):
-    while not queue.empty():
-        tag = queue.get()
+def parse_for(template, **kwargs):
+    '''
+    解析for语句块
+    因为if语句中可能会用到for中的变量，同时需要渲染if语句块
+    '''
 
-        if tag[0].startswith('{% endfor %}'):
-            return tag[1], tag[2]
-        else:
-            start, end = parse_for(template)
-
-        text = render_for(template[tag[1]:end], num=range(3), **kwargs)
-        template = template.replace(template[tag[1]:end], text)
-
-    return template
-
-
-
-
-
-
-
-
-
-
-def render_for(template, num='', **kwargs):
     tokens = _get_token_keys(template, for_reg)
     if not tokens:
         return ''
     for token in tokens:
         first_key = _get_words(token, for_first_key_reg)
-        # second_key = _get_words(token, for_second_key_reg)
-        text_init = _get_words(token, for_key_text)
+        second_key = _get_words(token, for_second_key_reg)
+        text = _get_words(token, for_key_text)
 
-        if not num:
+        if not kwargs[second_key]:
             template = template.replace(token, '')
             continue
 
-        temp = ''
-        for i in num:
-            kwargs.update({first_key: str(i)})
-            temp += render_keys(text_init, **kwargs)
+        result_text = ''
+        for i in kwargs[second_key]:
+            kwargs.update({first_key: i})
+            render_if_text = render_if(text, **kwargs)
+            result_text += render_key(render_if_text, **kwargs)
 
-        template = template.replace(token, temp)
+        template = template.replace(token, result_text)
 
     return template
 
 
 def render_if(template, **kwargs):
-    tokens = _get_token_keys(template, if_reg)
-    for match in tokens:
-        token = match.group(0)
-        key = _get_words(token, if_key_reg)
-        text = _get_words(token, if_key_text)
-        if kwargs.get(key, ''):
-            # text = render_keys(text, **kwargs) # 渲染key应在渲染if前完成，这里不需要渲染key
-            template = template.replace(token, text)
+    '''渲染if语句块'''
+
+    text = template[:]
+    start, end = 0, 0
+    while True:
+        token = re.search(if_tag, text)
+        if token:
+            if if_match.match(token.group(0)):
+                tag = queue.get()
+                text = parse_if(template[tag[1]:end+token.end()], **kwargs)
+                template = template.replace(template[tag[1]:end+token.end()], text)
+
+                end = len(text) - len(template[tag[1]:token.end()]) + tag[1]
+                text = template[end:]
+            else:
+                start, end = map(lambda x, y: x + y, (end, end), token.span())
+                queue.put((token.group(0), start, end))
+                text = template[end:]
         else:
-            template = template.replace(token, '')
+            break
 
     return template
 
 
-def render_keys(template, **kwargs):
+def parse_if(template, **kwargs):
+    '''解析if语句块'''
+
+    tokens = _get_token_keys(template, if_reg)
+    for token in tokens:
+        key = _get_words(token, if_key_reg)
+        text = _get_words(token, if_key_text)
+        if kwargs.get(key):
+            template = template.replace(token, text)
+        else:
+            template = template.replace(token, '')
+
+        # template = parse_if(template, **kwargs)  # 递归的渲染if
+
+    return template
+
+
+def render_key(template, **kwargs):
+    '''渲染并解析模板中的变量'''
+
     tokens = _get_token_keys(template, token_reg)
     for token in tokens:
-        # token = match.group(0)
         key = _get_words(token, key_reg)
         try:
-            template = template.replace(token, kwargs[key])
+            template = template.replace(token, str(kwargs[key]))
         except KeyError:
-            print 'Error: Variable ' + key + ' is required.'
             pass
 
     return template
 
 
 def _get_token_keys(template, reg):
+    '''获取匹配的语句块'''
+
     return re.findall(reg, template, re.S)
 
 
 def _get_words(token, reg):
+    '''获取匹配的语句块中的变量'''
+
     matchs = re.match(reg, token, re.S).groups(0)
     return matchs[0]
 
 
 if __name__ == '__main__':
     template_key = '''<html><body>
-                <div>
-                    <p>{{ name }}</p>
-                    <p>{{ city }}</p>
-                </div>
-            </body></html>'''
+                        <div>
+                            <p>{{name }}</p>
+                            <p>{{ city}}</p>
+                        </div>
+                    </body></html>'''
+
     template_if = '''<html><body>
-                    <div>
-                        {% if asdf %}
-                        <p>{{ name }}</p>
-                        {% endif %}
-                        {% if city %}
-                        <p>{{ city }}</p>
-                        {% endif %}
-                    </div>
-                </body></html>'''
+                        <div>
+                            {% if asdf %}
+                            <p>{{ name }}</p>
+                            {% endif %}
+                            {%if city %}
+                                <p>{{ city }}</p>
+                                {% if time %}
+                                    <p>{{ time }}</p>
+                                {% endif%}
+                            {%endif %}
+                        </div>
+                    </body></html>'''
+
     template_for = '''<html><body>
+                        <div>
+                            {%for i in num%}
+                                <p>{{ i }}</p>
+                                <p>{{ name }}</p>
+                                    {% for j in num %}
+                                        <p>{{ city }}</p>
+                                    {%endfor %}
+                                    {% for z in num %}
+                                        {% for j in num %}
+                                            <p>{{ time }}</p>
+                                        {% endfor %}
+                                    {%endfor %}
+                            {% endfor %}
+                        </div>
+                    </body></html>'''
+
+    template = '''<html><body>
                     <div>
-                        {% for i in num %}
+                        {{ time2 }}
+                        {%for i in num %}
                             <p>{{ i }}</p>
                             <p>{{ name }}</p>
-                                {% for j in num %}
+                                {%for j in num %}
                                     <p>{{ city }}</p>
                                 {% endfor %}
-                                {% for z in num %}
-                                    {% for j in num %}
-                                        <p>{{ time }}</p>
-                                    {% endfor %}
-                                {% endfor %}
+                                {% if i %}
+                                    {%if time2 %}
+                                        <p>{{ i }}</p>
+                                        <p>{{ time2 }}</p>
+                                    {% endif %}
+                                    {% if time3%}
+                                        <p>{{ time3 }}</p>
+                                    {%endif %}
+                                    <p>{{time }}</p>
+                                {% endif %}
                         {% endfor %}
                     </div>
                 </body></html>'''
-    keys = {'name': 'leon', 'city': 'Beijing', 'time': '0030'}
 
-    # print render_keys(template_key, **keys)
+    keys = {'name': 'leon', 'city': 'Beijing', 'time': '0030', 'time2': '1449', 'time3': '1517', 'num': list('asdf')}
+
+    # print render_key(template_key, **keys)
     # print render_if(template_if, **keys)
-    # print render_for(template_for, num=range(10), **keys)
-    # print render_for(template_for, num=range(3), **keys)
-    print render_for2(template_for, num=range(3), **keys)
-    # parse_for(template_for, num=range(3), **keys)
+    # print render_for(template_for, **keys)
+    # print render(template, **keys)
 
-
-from bottle import SimpleTemplate
-#
-# tpl = SimpleTemplate('''Hello
-#         %for i in range(3):
-#             %if True:
-#              {{name}}
-#             %end
-#             {{ city }}
-#         %end
-#             ''')
-
-# tpl = SimpleTemplate('''<div>
-#          %if True:
-#         <span>content</span>
-#          %end
-#         </div>''')
-# print tpl.render(name='World', city='Beijing')
-
+    with open('to_render.html', 'r') as to_render:
+        with open('result.html', 'w') as result:
+            template = to_render.read()
+            result.write(render(template, **keys))
