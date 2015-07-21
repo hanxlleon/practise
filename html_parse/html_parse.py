@@ -232,6 +232,7 @@ if __name__ == '__main__':
     # print render(template, **keys)
 
     with open('to_render.html', 'r') as to_render:
-        with open('result.html', 'w') as result:
-            template = to_render.read()
-            result.write(render(template, **keys))
+        template = to_render.read()
+
+    with open('result.html', 'w') as result:
+        result.write(render(template, **keys))
