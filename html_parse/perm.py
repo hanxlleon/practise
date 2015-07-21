@@ -24,3 +24,5 @@ print perm(s, 2)
 print perm(s, 3)
 print perm(s, 4)
 print perm(s, 5)
+
+import web
