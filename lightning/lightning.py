@@ -1,44 +1,72 @@
 from turtle import *
-from random import randint, choice, random
+from random import randint, random
 
 
-flag = 0
-def change(wid = 5, angle = 10):	
+def change(wid=5, max_angel=10, forwd=40):
 
-	while True:
-		wid = abs(wid - random() * 0.2)
-		angle = angle + randint(1, 5)
-		if angle < heading() <= 180:
-			direction = right
-		elif 180 < heading() < 360 - angle: 
-			direction = left
-		else:
-			direction = right if random() > 0.5 else left
-		distance = 15 + random() * 30
+    for i in range(forwd):
+        
+        wid = wid_change(wid)
+        forwd = forwd_change(forwd)
+        direction, angle = angle_change(max_angel)
 
-		pensize(wid)
-		direction(angle)
-		forward(distance)
+        pensize(wid)
+        direction(angle)
+        forward(forwd)
 
-		x, y = position()
-	
-		global flag
-		if random() > 0.8 and flag < 3:
-			flag = flag + 1
-			print flag
-			change(wid=pensize() * 0.5, angle=angle)
-			up()
-			setx(x)
-			sety(y)
-			down()
+        x, y = position()
 
-		if x > 300 or y > 300:
-			break
+        if random() > 0.7 and wid*random()>2:
+            change(wid=pensize() * 0.5, max_angel=40, forwd=15)
+            
+            up()
+            setx(x)
+            sety(y)
+            down()
+
+        if y < -200 or x > 300:
+            break
+
+def angle_change(max_angel=30):
+    angle = randint(10, 20)
+
+    left_angle, right_angle = 270 - max_angel, 270 + max_angel
+
+    if 90 < heading() <= left_angle:
+        direction = left
+    elif right_angle < (heading() % 360) or 0 <= right_angle <= 90:
+        direction = right
+    else:
+        direction = right if random() > 0.5 else left
+    
+    return (direction, angle)
 
 
-color('black', 'yellow')
-# right(90)
-change()
+def forwd_change(forwd):
+    forwd = 10 + random() * 15
+
+    return forwd
+
+def wid_change(wid):
+    wid = abs(wid - random() * 0.2)
+
+    return wid
+
+
+
+
+up()
+sety(300)
+down()
+
+right(90)
+# change()
+for i in range(5):
+    change()
+    # left(90)
+    up()
+    setx(-50+random()*250)
+    sety(300)
+    down()
 
 done()
-
