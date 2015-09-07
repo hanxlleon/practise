@@ -5,12 +5,12 @@ from random import randint, random
 
 def lightning(wid=5, max_angle=10, forwd_count=40):
     """
-    :wid 画笔宽度
-    :max_angle 画笔与-y轴的最大夹角，超过夹角则向相反方向移动
-    :forwd_count 前进的次数
+    :param wid: 画笔宽度
+    :param max_angle: 画笔与-y轴的最大夹角，超过夹角则向相反方向移动
+    :param forwd_count: 前进的次数
     """
 
-    for i in range(forwd_count):        
+    for i in range(forwd_count):
         wid = wid_change(wid)
         forwd = forwd_change()
         direction, angle = angle_change(max_angle)
@@ -22,17 +22,18 @@ def lightning(wid=5, max_angle=10, forwd_count=40):
         x, y = position()
 
         # 生成分叉
-        if random() > 0.7 and wid*random() > 2:
+        if random() > 0.7 and wid * random() > 2:
             lightning(wid=pensize() * 0.5, max_angle=40, forwd_count=15)
-            
+
             up()
             setx(x)
             sety(y)
             down()
 
-        #结束
+        # 结束
         if y < -200:
             break
+
 
 def angle_change(max_angle=30):
     """角度和转向变化"""
@@ -44,20 +45,21 @@ def angle_change(max_angle=30):
 
     if 90 < heading() <= left_angle:  # 如果过于偏左（y轴左侧超过max_angle），则下一次往右侧转（以画笔为视角则是向左转）
         direction = left
-    elif right_angle < (heading() % 360) or 0 <= right_angle <= 90:
+    elif right_angle < heading() or 0 <= heading() <= 90:
         direction = right
     else:
         direction = right if random() > 0.5 else left
-    
+
     return (direction, angle)
 
 
 def forwd_change(forwd=10):
     """步进距离变化"""
 
-    forwd = 10 + random() * 15
+    forwd = forwd + random() * 15
 
     return forwd
+
 
 def wid_change(wid):
     """宽度变化"""
@@ -76,7 +78,6 @@ if __name__ == '__main__':
     lightning()
     # for i in range(5):
     #     lightning()
-    #     left(90)
     #     up()
     #     setx(-50+random()*250)
     #     sety(300)
